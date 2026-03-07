@@ -431,3 +431,307 @@ let menuEnemies = [];
 let menuBlowups = []; 
 let menuLastEnemy = 0;
 let menuAnimTime  = 0;
+
+function showScreen(name) {
+    document.getElementById("menuScreen").classList.remove("active");
+    document.getElementById("diffScreen").classList.remove("active");
+    document.getElementById("htpScreen").classList.remove("active");
+
+    currentScreen = name;
+
+    if (name === "menu") {
+        document.getElementById("menuScreen").classList.add("active");
+        startMenuAnimation();
+        hideGameUI();
+    } else if (name === "diff") {
+        document.getElementById("diffScreen").classList.add("active");
+        refreshDiffHighScores();
+        stopMenuAnimation();
+    } else if (name === "htp") {
+        document.getElementById("htpScreen").classList.add("active");
+        stopMenuAnimation();
+    } else if (name === "game") {
+        stopMenuAnimation();
+        showGameUI();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+}
+
+function hideGameUI() {
+    ["health","score","raid","fps","bgToggle","pauseBtn","joystick","shootBtn"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+    });
+}
+
+function showGameUI() {
+    document.getElementById("health").style.display   = "";
+    document.getElementById("score").style.display    = "";
+    document.getElementById("raid").style.display     = "";
+    document.getElementById("fps").style.display      = "";
+    document.getElementById("bgToggle").style.display = "block";
+    document.getElementById("pauseBtn").style.display = "block";
+    if (navigator.maxTouchPoints > 0) {
+        document.getElementById("joystick").style.display  = "block";
+        document.getElementById("shootBtn").style.display  = "block";
+    }
+}
+
+function refreshDiffHighScores() {
+    ["easy","medium","hard"].forEach(d => {
+        const v = getHighScore(d);
+        document.getElementById("hs" + d.charAt(0).toUpperCase() + d.slice(1)).textContent =
+            v !== null ? "Best: " + v : "";
+    });
+}
+
+function startMenuAnimation() {
+    menuClouds  = [];
+    menuBullets = [];
+    menuEnemies = [];
+    menuBlowups = [];
+    menuPlane   = { x: -80, y: canvas.height * 0.45 };
+    menuLastEnemy = 0;
+
+    if (menuAnimId) cancelAnimationFrame(menuAnimId);
+    menuAnimTime = performance.now();
+    menuAnimFrame(menuAnimTime);
+}
+
+function stopMenuAnimation() {
+    if (menuAnimId) { cancelAnimationFrame(menuAnimId); menuAnimId = null; }
+}
+
+function menuAnimFrame(ts) {
+    menuAnimId = requestAnimationFrame(menuAnimFrame);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(currentBg, 0, 0, canvas.width, canvas.height);
+
+    const elapsed = ts - menuAnimTime;
+
+    if (Math.random() < 0.01) {
+        menuClouds.push({ x: canvas.width, y: Math.random() * canvas.height, spd: 1 + Math.random() * 1.5 });
+    }
+    menuClouds.forEach(c => { c.x -= c.spd; });
+    menuClouds = menuClouds.filter(c => c.x > -140);
+    menuClouds.forEach(c => {
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(cloudImg, c.x, c.y, 120, 60);
+        ctx.globalAlpha = 1;
+    });
+
+    menuPlane.x += 2.5;
+    if (menuPlane.x > canvas.width + 100) menuPlane.x = -80;
+    ctx.drawImage(planeImg, menuPlane.x, menuPlane.y, 60, 60);
+
+    if (ts - menuLastEnemy > 3000) {
+        menuLastEnemy = ts;
+        menuEnemies.push({
+            x: canvas.width + 20,
+            y: menuPlane.y + (Math.random() * 60 - 30),
+            type: Math.floor(Math.random() * 3),
+            dir: 1
+        });
+        menuBullets.push({ x: menuPlane.x + 60, y: menuPlane.y + 25 });
+    }
+
+    menuBullets.forEach(b => { b.x += 8; });
+    menuBullets = menuBullets.filter(b => b.x < canvas.width + 40);
+
+    for (let i = menuEnemies.length - 1; i >= 0; i--) {
+        const e = menuEnemies[i];
+        e.x -= 2.5;
+        ctx.drawImage(enemyImgs[e.type], e.x, e.y, 50, 50);
+
+        for (let j = menuBullets.length - 1; j >= 0; j--) {
+            const b = menuBullets[j];
+            if (b.x < e.x + 50 && b.x + 20 > e.x &&
+                b.y < e.y + 50 && b.y + 10 > e.y) {
+                menuBlowups.push({ x: e.x + 25, y: e.y + 25, born: ts });
+                menuEnemies.splice(i, 1);
+                menuBullets.splice(j, 1);
+                break;
+            }
+        }
+        if (menuEnemies[i] && e.x < -70) menuEnemies.splice(i, 1);
+    }
+
+    menuBullets.forEach(b => {
+        ctx.drawImage(bulletImg, b.x, b.y, 20, 10);
+    });
+
+    menuBlowups = menuBlowups.filter(bw => ts - bw.born < 500);
+    menuBlowups.forEach(bw => {
+        const age  = (ts - bw.born) / 500;
+        const r    = 35 * (1 - age);
+        ctx.save();
+        ctx.globalAlpha = 1 - age;
+        const grad = ctx.createRadialGradient(bw.x, bw.y, 0, bw.x, bw.y, r);
+        grad.addColorStop(0, "#fff");
+        grad.addColorStop(0.3, "#ffb300");
+        grad.addColorStop(1, "rgba(255,60,0,0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(bw.x, bw.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+document.getElementById("btnPlay").addEventListener("click", () => {
+    playClick();
+    showScreen("diff");
+});
+document.getElementById("btnHTP").addEventListener("click", () => {
+    playClick();
+    showScreen("htp");
+});
+document.getElementById("btnExit").addEventListener("click", () => {
+    playClick();
+    window.close();
+    document.body.innerHTML = '<div style="color:white;font-family:monospace;text-align:center;margin-top:20vh;font-size:24px;">Thanks for playing!<br>You can close this tab.</div>';
+});
+
+document.getElementById("htpBack").addEventListener("click", () => {
+    playClick();
+    showScreen("menu");
+});
+
+document.getElementById("diffBack").addEventListener("click", () => {
+    playClick();
+    showScreen("menu");
+});
+
+["easy","medium","hard"].forEach(d => {
+    const id = "btn" + d.charAt(0).toUpperCase() + d.slice(1);
+    document.getElementById(id).addEventListener("click", () => {
+        playClick();
+        currentDiff = d;
+        startGame();
+    });
+});
+
+let player, bullets, enemies, clouds;
+let score, raidCount;
+let gameOver, paused, playerVisible;
+let raidTimer = null;
+
+function resetGame() {
+    player        = { x: 100, y: canvas.height / 2, health: 100 };
+    bullets       = [];
+    enemies       = [];
+    clouds        = [];
+    score         = 0;
+    raidCount     = 0;
+    gameOver      = false;
+    paused        = false;
+    playerVisible = true;
+    blowupEl.style.display = "none";
+    clearTimeout(blowupTid);
+    document.querySelectorAll(".enemyBlowup").forEach(el => el.remove());
+}
+
+let cameraY = 0;
+
+const keys = {};
+window.addEventListener("keydown", e => {
+    keys[e.code] = true;
+    if ((e.code === "Space" || e.code === "ControlLeft" || e.code === "ControlRight") && !e.repeat) {
+        shoot();
+    }
+    if (e.code === "Escape" && currentScreen === "game" && !gameOver) {
+        togglePause();
+    }
+    if (["Space","ArrowUp","ArrowDown"].includes(e.code)) e.preventDefault();
+});
+window.addEventListener("keyup", e => { keys[e.code] = false; });
+
+function getKeyboardMoveY() {
+    if (keys["KeyW"] || keys["ArrowUp"])   return -1;
+    if (keys["KeyS"] || keys["ArrowDown"]) return  1;
+    return 0;
+}
+
+//Controls
+let joystickMoveY = 0;
+let dragging      = false;
+
+const joystick = document.getElementById("joystick");
+const stick    = document.getElementById("stick");
+const shootBtn = document.getElementById("shootBtn");
+
+function handleJoystick(clientY) {
+    const rect = joystick.getBoundingClientRect();
+    let y = clientY - rect.top - 60;
+    y = Math.max(-40, Math.min(40, y));
+    stick.style.top    = (30 + y) + "px";
+    joystickMoveY      = y / 40;
+}
+
+joystick.addEventListener("mousedown", () => dragging = true);
+window.addEventListener("mouseup",  () => { dragging = false; stick.style.top = "30px"; joystickMoveY = 0; });
+window.addEventListener("mousemove", e => { if (dragging) handleJoystick(e.clientY); });
+
+joystick.addEventListener("touchstart", e => { e.preventDefault(); dragging = true; }, { passive: false });
+window.addEventListener("touchend",   () => { dragging = false; stick.style.top = "30px"; joystickMoveY = 0; });
+window.addEventListener("touchmove",  e => { if (dragging) handleJoystick(e.touches[0].clientY); });
+
+function getTotalMoveY() {
+    const kb = getKeyboardMoveY();
+    return kb !== 0 ? kb : joystickMoveY;
+}
+
+shootBtn.addEventListener("mousedown", shoot);
+shootBtn.addEventListener("touchstart", e => { e.preventDefault(); shoot(); }, { passive: false });
+
+setInterval(() => {
+    if (currentScreen !== "game") return;
+    clouds.push({ x: canvas.width, y: Math.random() * canvas.height, speed: 1 + Math.random() * 2 });
+}, 1500);
+
+//Raid
+function scheduleRaid() {
+    const s = getDiffSettings();
+    const delay = s.spawnMin + Math.random() * s.spawnRand;
+    raidTimer = setTimeout(doRaid, delay);
+}
+
+function doRaid() {
+    if (gameOver) return;
+    const s = getDiffSettings();
+    const [minC, maxC] = s.enemyCount;
+    const count = minC + Math.floor(Math.random() * (maxC - minC + 1));
+    raidCount++;
+    for (let i = 0; i < count; i++) {
+        enemies.push({
+            x:    canvas.width + i * 80,
+            y:    Math.random() * (canvas.height - 60),
+            type: Math.floor(Math.random() * 3),
+            dir:  Math.random() > 0.5 ? 1 : -1
+        });
+    }
+    scheduleRaid();
+}
+
+function shoot() {
+    if (gameOver || paused || currentScreen !== "game") return;
+    bullets.push({ x: player.x + 60, y: player.y + 20 });
+    playShoot();
+    if (typeof triggerShake === "function") triggerShake(5);
+}
+
+document.getElementById("bgToggle").addEventListener("click", () => {
+    isNight   = !isNight;
+    currentBg = isNight ? bgNight : bgDay;
+    document.getElementById("bgToggle").textContent = isNight ? "🌙 Night" : "☀️ Day";
+});
+
+document.getElementById("pauseBtn").addEventListener("click", togglePause);
+document.getElementById("btnResume").addEventListener("click", () => { playClick(); resumeGame(); });
+document.getElementById("btnPauseMenu").addEventListener("click", () => {
+    playClick();
+    paused = false;
+    document.getElementById("pausePopup").style.display = "none";
+    gameOver = true; 
+    clearTimeout(raidTimer);
