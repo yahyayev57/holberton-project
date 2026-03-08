@@ -735,3 +735,210 @@ document.getElementById("btnPauseMenu").addEventListener("click", () => {
     document.getElementById("pausePopup").style.display = "none";
     gameOver = true; 
     clearTimeout(raidTimer);
+    
+    document.getElementById("gameOver").style.display = "none";
+    showScreen("menu");
+});
+
+function togglePause() {
+    if (gameOver) return;
+    paused ? resumeGame() : pauseGame();
+}
+
+function pauseGame() {
+    paused = true;
+    document.getElementById("pausePopup").style.display = "flex";
+}
+
+function resumeGame() {
+    paused = false;
+    document.getElementById("pausePopup").style.display = "none";
+    lastFrame = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+    showScreen("game");
+    resetGame();
+    cameraY = 0;
+    raidTimer = setTimeout(doRaid, 1500);
+    lastFrame = 0;
+    requestAnimationFrame(gameLoop);
+}
+
+document.getElementById("restartBtn").addEventListener("click", () => {
+    document.getElementById("gameOver").style.display = "none";
+    startGame();
+});
+
+document.getElementById("goMenuBtn").addEventListener("click", () => {
+    document.getElementById("gameOver").style.display = "none";
+    showScreen("menu");
+});
+
+function gameLoop(timestamp) {
+    if (paused) return; 
+
+    if (timestamp - lastFrame < FRAME_TIME) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    lastFrame = timestamp;
+
+    fpsCounter++;
+    if (timestamp > fpsTimer + 1000) {
+        currentFPS = fpsCounter;
+        fpsCounter = 0;
+        fpsTimer   = timestamp;
+    }
+
+    const moveY = getTotalMoveY();
+    const spd   = getDiffSettings().enemySpeed;
+    const shake = (typeof getShakeOffset === "function") ? getShakeOffset() : { x: 0, y: 0 };
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
+    ctx.drawImage(currentBg, 0, 0, canvas.width, canvas.height);
+
+    cameraY += (player.y - cameraY) * 0.08;
+    ctx.translate(0, -cameraY + canvas.height / 2 - 100);
+
+    player.y += moveY * 5;
+    player.y  = Math.max(0, Math.min(canvas.height - 60, player.y));
+    if (playerVisible) ctx.drawImage(planeImg, player.x, player.y, 60, 60);
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += 8;
+        ctx.drawImage(bulletImg, b.x, b.y, 20, 10);
+
+        let hit = false;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (b.x < e.x + 50 && b.x + 20 > e.x &&
+                b.y < e.y + 50 && b.y + 10 > e.y) {
+                const esx = e.x + 25;
+                const esy = (e.y + 25) - cameraY + canvas.height / 2 - 100;
+                showEnemyBlowup(esx, esy);
+                playExplode(0.45);
+                enemies.splice(j, 1);
+                bullets.splice(i, 1);
+                score += 10;
+                hit = true;
+                break;
+            }
+        }
+        if (!hit && b.x > canvas.width) bullets.splice(i, 1);
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.x -= spd;
+        e.y += e.dir * 2;
+        if (e.y < 0 || e.y > canvas.height - 50) e.dir *= -1;
+        ctx.drawImage(enemyImgs[e.type], e.x, e.y, 50, 50);
+
+        if (e.x < player.x + 50 && e.x + 50 > player.x &&
+            e.y < player.y + 50 && e.y + 50 > player.y) {
+            player.health -= 10;
+            playHit();
+            if (typeof triggerDamageFlash === "function") triggerDamageFlash();
+            enemies.splice(i, 1);
+            continue;
+        }
+        if (e.x < -60) enemies.splice(i, 1);
+    }
+
+    clouds.forEach(c => {
+        c.x -= c.speed;
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(cloudImg, c.x, c.y, 120, 60);
+        ctx.globalAlpha = 1;
+    });
+
+    ctx.restore();
+
+    if (typeof drawDamageFlash === "function") drawDamageFlash(ctx, canvas);
+
+    document.getElementById("health").innerText = "❤ " + player.health;
+    document.getElementById("score").innerText  = "Score: "  + score;
+    document.getElementById("raid").innerText   = "Raid: "   + raidCount;
+    document.getElementById("fps").innerText    = "FPS: "    + currentFPS;
+
+    if (player.health <= 0 && !gameOver) { triggerDeath(); return; }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function triggerDeath() {
+    gameOver      = true;
+    playerVisible = false;
+    clearTimeout(raidTimer);
+
+    const sx = player.x + 30;
+    const sy = (player.y + 30) - cameraY + canvas.height / 2 - 100;
+    showBlowup(sx, sy);
+    playExplode(0.9);
+    if (typeof triggerShake === "function") triggerShake(20);
+
+    const startTime = performance.now();
+
+    function deathLoop(ts) {
+        if (ts - lastFrame >= FRAME_TIME) {
+            lastFrame = ts;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const sh = (typeof getShakeOffset === "function") ? getShakeOffset() : { x: 0, y: 0 };
+            ctx.save();
+            ctx.translate(sh.x, sh.y);
+            ctx.drawImage(currentBg, 0, 0, canvas.width, canvas.height);
+            ctx.translate(0, -cameraY + canvas.height / 2 - 100);
+            const spd = getDiffSettings().enemySpeed;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                e.x -= spd;
+                e.y += e.dir * 2;
+                if (e.y < 0 || e.y > canvas.height - 50) e.dir *= -1;
+                ctx.drawImage(enemyImgs[e.type], e.x, e.y, 50, 50);
+                if (e.x < -60) enemies.splice(i, 1);
+            }
+            clouds.forEach(c => {
+                c.x -= c.speed;
+                ctx.globalAlpha = 0.35;
+                ctx.drawImage(cloudImg, c.x, c.y, 120, 60);
+                ctx.globalAlpha = 1;
+            });
+            ctx.restore();
+            if (typeof drawDamageFlash === "function") drawDamageFlash(ctx, canvas);
+        }
+        if (ts - startTime < BLOWUP_DURATION) requestAnimationFrame(deathLoop);
+        else endGame();
+    }
+
+    requestAnimationFrame(deathLoop);
+}
+function endGame() {
+    const prev = getHighScore(currentDiff) || 0;
+    if (score > prev) setHighScore(currentDiff, score);
+    const best = getHighScore(currentDiff);
+
+    document.getElementById("finalScore").innerText      = "Score: " + score;
+    document.getElementById("highScoreDisplay").innerText = "Best (" + DIFF[currentDiff].label + "): " + best;
+    document.getElementById("gameOver").style.display    = "flex";
+    hideGameUI();
+}
+
+(function boot() {
+    let loaded = 0;
+    function checkDone() {
+        loaded++;
+        if (loaded >= assets.length) {
+            showScreen("menu");
+        }
+    }
+    assets.forEach(img => {
+        if (img.complete) checkDone();
+        else { img.onload = checkDone; img.onerror = checkDone; }
+    });
+})();
