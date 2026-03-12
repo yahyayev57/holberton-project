@@ -942,3 +942,4 @@ function endGame() {
         else { img.onload = checkDone; img.onerror = checkDone; }
     });
 })();
+
