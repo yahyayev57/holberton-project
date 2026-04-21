@@ -38,7 +38,6 @@ High scores are saved **per difficulty** in your browser's local storage.
 ├── index.html
 ├── game.js          ← all gameplay, UI, menu logic
 ├── effects.js       ← screen shake, damage flash
-├── menu.js          ← (reserved for future use)
 ├── audio/
 │   ├── shoot.mp3
 │   ├── hit.mp3
