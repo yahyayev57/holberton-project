@@ -6,8 +6,8 @@
 |--------|----------|--------|
 | Move Up | `W` / `↑` | `Joystick UP` |
 | Move Down | `S` / `↓` | `Joystick Down` |
-| Shoot | `Space` / `Ctrl` | Shoot Button |
-| Pause | `Escape` | Pause Button |
+| Shoot | `Space` / `Ctrl` | `Shoot Button` |
+| Pause | `Escape` | `Pause Button` |
 
 ---
 
