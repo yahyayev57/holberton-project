@@ -4,8 +4,8 @@
 
 | Action | Keyboard | Mobile |
 |--------|----------|--------|
-| Move Up | `W` / `↑` | Joystick |
-| Move Down | `S` / `↓` | Joystick |
+| Move Up | `W` / `↑` | `Joystick UP` |
+| Move Down | `S` / `↓` | `Joystick Down` |
 | Shoot | `Space` / `Ctrl` | Shoot Button |
 | Pause | `Escape` | Pause Button |
 
